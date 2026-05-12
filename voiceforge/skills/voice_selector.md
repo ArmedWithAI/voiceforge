@@ -26,7 +26,7 @@ Select the best premade ElevenLabs voice for a business demo and return top cand
 
 ## Reasoning Process
 
-1. Filter to premade voices only.
+1. Consider only plan-safe premade voices (fixed catalog in `agents/voice_picker.py`: entry-tier / widely available IDs; excludes tier-gated premades such as Bella).
 2. Score each voice by metadata and descriptive labels.
 3. Rank voices and keep top 3.
 4. If close scores tie, ask Claude to break tie with concise rationale.

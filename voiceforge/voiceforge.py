@@ -73,24 +73,24 @@ def _mock_script(context: Dict[str, Any]) -> str:
 def _mock_voice_result(override_voice_id: str = "") -> Dict[str, Any]:
     voices = [
         {
-            "voice_id": "premade-rachel",
+            "voice_id": "21m00Tcm4TlvDq8ikWAM",
             "name": "Rachel",
             "category": "premade",
             "description": "Warm and professional with confident clarity.",
             "labels": {"gender": "female", "age": "young_adult", "accent": "american"},
         },
         {
-            "voice_id": "premade-adam",
+            "voice_id": "pNInz6obpgDQGcFmaJgB",
             "name": "Adam",
             "category": "premade",
             "description": "Clear and mature with calm delivery.",
             "labels": {"gender": "male", "age": "middle_aged", "accent": "american"},
         },
         {
-            "voice_id": "premade-bella",
-            "name": "Bella",
+            "voice_id": "AZnzlk1XvdvUeBnXmlld",
+            "name": "Domi",
             "category": "premade",
-            "description": "Friendly and upbeat for customer engagement.",
+            "description": "Strong and articulate for customer engagement.",
             "labels": {"gender": "female", "age": "young_adult", "accent": "american"},
         },
     ]

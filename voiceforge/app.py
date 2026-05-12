@@ -83,6 +83,38 @@ def _script_preview(script_text: str, max_len: int = 420) -> str:
     return cleaned[: max_len - 3].rstrip() + "..."
 
 
+def _subprocess_output_tail(stderr: str, stdout: str, max_chars: int = 8000) -> str:
+    """Combined stderr/stdout tail for logs and optional JSON `details`."""
+    err = stderr or ""
+    out = stdout or ""
+    if err.strip() and out.strip():
+        blob = f"{err.rstrip()}\n\n--- stdout ---\n{out.rstrip()}"
+    else:
+        blob = err.strip() or out.strip()
+    if len(blob) <= max_chars:
+        return blob
+    return blob[-max_chars:].lstrip()
+
+
+def _summarize_subprocess_failure(stderr: str, stdout: str, max_len: int = 480) -> str:
+    """Pick a single human-readable line (usually the exception message) for the UI."""
+    text = (stderr or "").strip() or (stdout or "").strip()
+    if not text:
+        return ""
+    lines = [ln.rstrip() for ln in text.splitlines() if ln.strip()]
+    for line in reversed(lines):
+        stripped = line.strip()
+        if stripped in ("^", "~") or stripped.startswith("~~~~"):
+            continue
+        if len(stripped) <= 1:
+            continue
+        if len(stripped) > max_len:
+            return stripped[: max_len - 3].rstrip() + "..."
+        return stripped
+    snippet = text[-max_len:] if len(text) > max_len else text
+    return snippet.strip()
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -122,12 +154,33 @@ def generate():
 
     folder = _resolve_latest_output_folder(before)
     if proc.returncode != 0:
-        err_tail = (proc.stderr or proc.stdout or "")[-2000:]
+        stderr = proc.stderr or ""
+        stdout = proc.stdout or ""
+        err_tail = _subprocess_output_tail(stderr, stdout)
+        summary = _summarize_subprocess_failure(stderr, stdout)
+        if summary:
+            user_error = f"voiceforge.py exited with code {proc.returncode}: {summary}"
+        elif err_tail:
+            user_error = (
+                f"voiceforge.py exited with code {proc.returncode}: "
+                f"{err_tail[-480:].strip()}"
+            )
+        else:
+            user_error = (
+                f"voiceforge.py exited with code {proc.returncode} "
+                "(no stderr/stdout captured — check server logs and .env)"
+            )
+        app.logger.error(
+            "voiceforge.py failed returncode=%s business=%r\n%s",
+            proc.returncode,
+            business,
+            err_tail or "(empty stderr and stdout)",
+        )
         return jsonify(
             {
                 "ok": False,
-                "error": f"voiceforge.py exited with code {proc.returncode}",
-                "details": err_tail.strip(),
+                "error": user_error,
+                "details": err_tail,
                 "folder": str(folder) if folder else None,
             }
         ), 500

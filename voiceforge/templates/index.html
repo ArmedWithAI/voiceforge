@@ -577,6 +577,12 @@
 
     .error-toast.visible {
       display: block;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.82rem;
+      max-height: min(70vh, 420px);
+      overflow-y: auto;
     }
   </style>
 </head>
@@ -893,7 +899,12 @@
           loadingPanel.classList.remove("active");
           btnGenerate.disabled = false;
           if (!result.ok || !result.data.ok) {
-            showError(result.data.error || result.data.details || "Generation failed.");
+            var errLine = (result.data.error || "").trim();
+            var details = (result.data.details || "").trim();
+            var parts = [];
+            if (errLine) parts.push(errLine);
+            if (details && details !== errLine) parts.push(details);
+            showError(parts.join("\n\n") || "Generation failed.");
             return;
           }
           var d = result.data;

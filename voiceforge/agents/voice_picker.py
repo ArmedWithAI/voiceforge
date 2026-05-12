@@ -8,6 +8,28 @@ MODEL_NAME = "claude-sonnet-4-5"
 VOICES_ENDPOINT = "https://api.elevenlabs.io/v1/voices"
 _VOICE_CACHE: List[Dict[str, Any]] = []
 
+# Default [CUSTOMER] voice when multiple candidates match (alphabetical order used to pick Bella first).
+CUSTOMER_VOICE_FALLBACK_ID = "6aDn1KB0hjpdcocrUkmq"  # Tiffany
+
+# Premade voices allowed for selection: matched to your current ElevenLabs account.
+PLAN_SAFE_PREMADE_VOICE_IDS = frozenset(
+    {
+        "hpp4J3VqNfWAUOO0d1Us",  # Bella - Professional, Bright, Warm
+        "iP95p4xoKVk53GoZ742B",  # Chris - Charming, Down-to-Earth
+        "nPczCjzI2devNBz1zQrb",  # Brian - Deep, Resonant and Comforting
+        "onwK4e9ZLuTAKqWW03F9",  # Daniel - Steady Broadcaster
+        "pFZP5JQG7iQjIQuC4Bku",  # Lily - Velvety Actress
+        "pNInz6obpgDQGcFmaJgB",  # Adam - Dominant, Firm
+        "pqHfZKP75CvOlQylNhV4",  # Bill - Wise, Mature, Balanced
+        "6fZce9LFNG3iEITDfqZZ",  # Charlotte - Warm, Clear, Modern, Distinctive
+        "6aDn1KB0hjpdcocrUkmq",  # Tiffany - Natural and Welcoming
+        "Lhz3IUCNLm2vpOD2OX5Q",  # Jess - Poetic, Soothing and Calm
+        "CwhRBWXzGAHq8TQ4Fs17",  # Roger - Laid-Back, Casual, Resonant
+    }
+)
+
+_FREE_TIER_MARKERS = frozenset({"free", "starter"})
+
 
 def _industry_weights(industry: str) -> Dict[str, float]:
     lowered = industry.lower()
@@ -97,8 +119,26 @@ def pick_customer_voice(agent_voice: Dict[str, Any], elevenlabs_api_key: str) ->
         if opposite:
             others = opposite
 
+    preferred = next((v for v in others if v.get("voice_id") == CUSTOMER_VOICE_FALLBACK_ID), None)
+    if preferred:
+        return preferred
+
     others.sort(key=lambda x: str(x.get("name", "")))
     return others[0]
+
+
+def _voice_allowed_for_all_plans(voice: Dict[str, Any]) -> bool:
+    """Drop premades that declare paid-only tiers in the API (when that metadata is present)."""
+    vid = str(voice.get("voice_id") or "")
+    if vid not in PLAN_SAFE_PREMADE_VOICE_IDS:
+        return False
+    tiers = voice.get("available_for_tiers")
+    if not tiers or not isinstance(tiers, list):
+        return True
+    lowered = {str(t).lower() for t in tiers if t is not None}
+    if not lowered:
+        return True
+    return bool(lowered & _FREE_TIER_MARKERS)
 
 
 def _fetch_voices(api_key: str) -> List[Dict[str, Any]]:
@@ -109,7 +149,8 @@ def _fetch_voices(api_key: str) -> List[Dict[str, Any]]:
     response = requests.get(VOICES_ENDPOINT, headers={"xi-api-key": api_key}, timeout=20)
     response.raise_for_status()
     voices = response.json().get("voices", [])
-    _VOICE_CACHE = [v for v in voices if v.get("category") == "premade"]
+    premade = [v for v in voices if v.get("category") == "premade"]
+    _VOICE_CACHE = [v for v in premade if _voice_allowed_for_all_plans(v)]
     return _VOICE_CACHE
 
 
@@ -127,7 +168,10 @@ def pick_voice(
     if override_voice_id:
         selected = next((v for v in voices if v.get("voice_id") == override_voice_id), None)
         if not selected:
-            raise ValueError(f"Override voice '{override_voice_id}' was not found among premade voices.")
+            raise ValueError(
+                f"Override voice '{override_voice_id}' was not found among plan-safe premade voices "
+                "(see PLAN_SAFE_PREMADE_VOICE_IDS in agents/voice_picker.py)."
+            )
         return {
             "selected": selected,
             "top_3": [{"voice": selected, "score": 999.0, "reason": "manual override"}],
